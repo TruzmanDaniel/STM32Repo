@@ -20,7 +20,7 @@
 #include "main.h"
 
 /* Private includes ----------------------------------------------------------*/
-/* USER CODE BEGIN IncludesPrueba */
+/* USER CODE BEGIN Includes */
 
 /* USER CODE END Includes */
 
