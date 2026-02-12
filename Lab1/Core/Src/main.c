@@ -103,6 +103,10 @@ int main(void)
   MX_GPIO_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
+
+  //PB8 as a digital input (01) in the position 11-10
+  GPIOB->MODER &= ~(1 << (5*2 +1));
+  GPIOA->MODER |= (1 << (5*2));
   // PA5 (Green LED) as digital output
   GPIOA->MODER &= ~(1 << (5*2 +1));
   GPIOA->MODER |= (1 << (5*2));
@@ -128,9 +132,11 @@ int main(void)
 		 switch(estado){
 		 case 0:
 			 GPIOA->BSRR = (1<<5);
+			 GPIOB->BSRR = (1<<5);
 			 break;
 		 default:
 			 GPIOA->BSRR = (1<<5)<<16;
+			 GPIOB->BSRR = (1<<5)<<16;
 		 }
 		 if(estado == 0){
 			 printf("Modo: Manual \r\n");
