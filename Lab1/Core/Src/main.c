@@ -51,6 +51,7 @@ UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 unsigned char estado = 0;
+unsigned char medicion = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -64,11 +65,16 @@ static void MX_USART2_UART_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 void EXTI15_10_IRQHandler(void) {
-	if (EXTI->PR!=0) {
+	if (EXTI->PR & (1 << 13)) {
 		estado++;
 	if (estado > 1) estado = 0;
 		EXTI->PR = (0x01 << 13);
 	}
+}
+
+void EXTI3_IRQHandler(void){
+	EXTI->PR = (0x01 << 3); //Clearing flag no need on condition as EXTI3 only flags at EXTI3 while EXTI15_10 flags between those exties.
+	medicion = 1;
 }
 /* USER CODE END 0 */
 
@@ -113,13 +119,28 @@ int main(void)
   // PC13 (USER button) as digital input (00)
   GPIOC->MODER &= ~(1 << (13*2 +1));
   GPIOC->MODER &= ~(1 << (13*2));
+
+  //PB3 (Extra button) as digital input(00)
+  GPIOB->MODER &= ~(1 << (3*2 +1));
+  GPIOB->MODER &= ~(1 << (3*2));
+  GPIOB->PUPDR &= ~(3 << (3 * 2));
+  GPIOB->PUPDR |=  (2 << (3 * 2));
+
   // Setting of EXTI13 for falling edge
+  SYSCFG->EXTICR[3] &= ~(0xF << 4);   // cleaning EXTI13
+  SYSCFG->EXTICR[3] |=  (0x2 << 4);   // PC13
   EXTI->FTSR |= (0x01 << 13); // Enables falling edge in EXTI13
   EXTI->RTSR &= ~(0x01 << 13); // Disables rising edge in EXTI13
-  SYSCFG->EXTICR[3] = (2 << 4); // EXTI13 linked to GPIOC (i.e. USER button = PC13)
   EXTI->IMR |= (0x01 << 13); // Enables EXTI13
   NVIC->ISER[1] |= (1 << (40-32)); // Enables IRQ for EXTI13 (40th position)
 
+  //Setting of EXTI3 for rising edge
+  SYSCFG->EXTICR[0] &= ~(0xF << 12);   // cleaning EXTI3
+  SYSCFG->EXTICR[0] |=  (0x1 << 12);   // PB3
+  EXTI->FTSR &= ~(0x01 << 3); // Disables falling edge in EXTI3
+  EXTI->RTSR |= (0x01 << 3); // enables rising edge in EXTI3
+  EXTI->IMR |= (0x01 << 3); // Enables EXTI3
+  NVIC->ISER[0] |= (1 << 9); // Enables IRQ for EXTI3 (9th position)
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -132,7 +153,6 @@ int main(void)
 		 switch(estado){
 		 case 0:
 			 GPIOA->BSRR = (1<<5);
-			 GPIOB->BSRR = (1<<5);
 			 break;
 		 default:
 			 GPIOA->BSRR = (1<<5)<<16;
@@ -143,6 +163,12 @@ int main(void)
 		 }else{
 			 printf("Modo: Automatico \r\n");
 		 }
+	 }
+
+	 if(estado == 0 && medicion == 1){
+		 printf("Modo: Manual, iniciando medicion \r\n");
+		 GPIOB->BSRR = (1<<5);
+		 medicion = 0;
 	 }
     /* USER CODE BEGIN 3 */
   }
