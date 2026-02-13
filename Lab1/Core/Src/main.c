@@ -74,7 +74,9 @@ void EXTI15_10_IRQHandler(void) {
 
 void EXTI3_IRQHandler(void){
 	EXTI->PR = (0x01 << 3); //Clearing flag no need on condition as EXTI3 only flags at EXTI3 while EXTI15_10 flags between those exties.
-	medicion = 1;
+	if(estado == 0){
+		medicion = 1;
+	}
 }
 /* USER CODE END 0 */
 
@@ -171,7 +173,6 @@ int main(void)
 		 GPIOB->BSRR = (1<<5);
 		 medicion = 0;
 	 }else{
-		 medicion = 0;
 	 }
     /* USER CODE BEGIN 3 */
   }
