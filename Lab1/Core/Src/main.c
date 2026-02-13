@@ -162,12 +162,15 @@ int main(void)
 			 printf("Modo: Manual \r\n");
 		 }else{
 			 printf("Modo: Automatico \r\n");
+			 medicion == 0;
 		 }
 	 }
 
 	 if(estado == 0 && medicion == 1){
 		 printf("Modo: Manual, iniciando medicion \r\n");
 		 GPIOB->BSRR = (1<<5);
+		 medicion = 0;
+	 }else{
 		 medicion = 0;
 	 }
     /* USER CODE BEGIN 3 */
