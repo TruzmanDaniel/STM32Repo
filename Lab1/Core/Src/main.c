@@ -21,19 +21,22 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include <stdio.h>
 extern UART_HandleTypeDef huart2;
 
-int _write(int file, char *ptr, int len)
-{
-    HAL_UART_Transmit(&huart2, (uint8_t*)ptr, len, HAL_MAX_DELAY);
-    return len;
+int _write(int file, char *ptr, int len) {
+	int i=0;
+	for(i=0; i<len; i++)
+	HAL_UART_Transmit(&huart2,(uint8_t *)(ptr++),1,1000);
+	return len;
+}
+void waiting(unsigned int delay) {
+	unsigned int i;
+	for (i=0; i<delay; i++);
 }
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -52,34 +55,36 @@ ADC_HandleTypeDef hadc;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-unsigned char estado = 0;
-unsigned char medicion = 0;
+unsigned char state = 0;
+unsigned char medicion_init = 0;
+unsigned char medicion_end = 1;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_USART2_UART_Init(void);
 static void MX_ADC_Init(void);
+static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-void EXTI15_10_IRQHandler(void) {
-	if (EXTI->PR & (1 << 13)) {
-		estado++;
-	if (estado > 1) estado = 0;
+void EXTI15_10_IRQHandler(void){
+	if(EXTI->PR & (1 << 13)){
 		EXTI->PR = (0x01 << 13);
+		state = state + 1;
+		if (state >1) state = 0;
 	}
 }
 
-void EXTI3_IRQHandler(void){
-	EXTI->PR = (0x01 << 3); //Clearing flag no need on condition as EXTI3 only flags at EXTI3 while EXTI15_10 flags between those exties.
-	if(estado == 0){
-		medicion = 1;
-	}
+void EXTI4_IRQHandler(void){
+	// no need to verify EXTI PR as it only triggers this function with EXTI4
+	EXTI->PR = (0x01 << 4);
+	medicion_init = 1;
+	medicion_end = 0;
+
 }
 /* USER CODE END 0 */
 
@@ -91,9 +96,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-	unsigned char estado_ant = 0;
-	unsigned short value;
-	uint8_t text[6];
+	unsigned char prev_state = 0;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -114,70 +117,86 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_USART2_UART_Init();
   MX_ADC_Init();
+  MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
+  /*INPUTS: */
+  /*PB4 configuration EXTI mode, moder (00)*/
+  GPIOB ->MODER &= ~(1 << (4*2 + 1));
+  GPIOB ->MODER &= ~(1 << (4*2));
+  GPIOB ->PUPDR &= ~(3 << 8); // cleaning any previous configuration
+  GPIOB ->PUPDR |= (2 << 8); // Setting button on pull down (10)
 
-  //PB5 as a digital input (01) in the position 11-10
-  GPIOB->MODER &= ~(1 << (5*2 +1));
-  GPIOA->MODER |= (1 << (5*2));
-  // PA5 (Green LED) as digital output
-  GPIOA->MODER &= ~(1 << (5*2 +1));
-  GPIOA->MODER |= (1 << (5*2));
-  // PC13 (USER button) as digital input (00)
-  GPIOC->MODER &= ~(1 << (13*2 +1));
-  GPIOC->MODER &= ~(1 << (13*2));
+  SYSCFG ->EXTICR[1] &= ~(0xF << 0);	//Cleaning any new previous at SYSCFG
+  SYSCFG->EXTICR[1] |= (0x01 << 0);		// Enabling EXTI4 for PB4 with 0001
+  EXTI ->FTSR &= ~(0x01 << 4);			// Disabling falling edge
+  EXTI ->RTSR |= (0x01 << 4);			// Enabling rising edge
+  EXTI ->IMR |= (0x01 << 4); 			// Enable EXTI 4
+  NVIC ->ISER[0] |= (1 << 10); 	// Enable EXTI4 NVIC
 
-  //PB3 (Extra button) as digital input(00)
-  GPIOB->MODER &= ~(1 << (3*2 +1));
-  GPIOB->MODER &= ~(1 << (3*2));
-  GPIOB->PUPDR &= ~(3 << (3 * 2));
-  GPIOB->PUPDR |=  (2 << (3 * 2));
+  /*PC13 configuration EXTI mode, moder(00)*/
+  GPIOC ->MODER &= ~(1 << (13*2 + 1));
+  GPIOC ->MODER &= ~(1 << (13*2));
 
-  // Setting of EXTI13 for falling edge
-  SYSCFG->EXTICR[3] &= ~(0xF << 4);   // cleaning EXTI13
-  SYSCFG->EXTICR[3] |=  (0x2 << 4);   // PC13
-  EXTI->FTSR |= (0x01 << 13); // Enables falling edge in EXTI13
-  EXTI->RTSR &= ~(0x01 << 13); // Disables rising edge in EXTI13
-  EXTI->IMR |= (0x01 << 13); // Enables EXTI13
-  NVIC->ISER[1] |= (1 << (40-32)); // Enables IRQ for EXTI13 (40th position)
+  SYSCFG ->EXTICR[3] &= ~(0xF << 4);	//Cleaning any new previous at SYSCFG
+  SYSCFG->EXTICR[3] |= (0x02 << 4);		// Enabling EXTI13 for PC13 with 0010
+  EXTI ->FTSR |= (0x01 << 13);			// Enable falling edge
+  EXTI ->RTSR &= ~(0x01 << 13);			// Disable rising edge
+  EXTI ->IMR |= (0x01 << 13); 			// Enable EXTI 13
+  NVIC ->ISER[1] |= (1 << (40-32)); 	// Enable EXTI15_10 NVIC
 
-  //Setting of EXTI3 for rising edge
-  SYSCFG->EXTICR[0] &= ~(0xF << 12);   // cleaning EXTI3
-  SYSCFG->EXTICR[0] |=  (0x1 << 12);   // PB3
-  EXTI->FTSR &= ~(0x01 << 3); // Disables falling edge in EXTI3
-  EXTI->RTSR |= (0x01 << 3); // enables rising edge in EXTI3
-  EXTI->IMR |= (0x01 << 3); // Enables EXTI3
-  NVIC->ISER[0] |= (1 << 9); // Enables IRQ for EXTI3 (9th position)
+  /*OUTPUTS: */
+  /*PA5 configuration in output mode, moder(01)  */
+  GPIOA ->MODER &= ~(1 << (5*2 + 1));
+  GPIOA ->MODER |= (1 << (5*2));
+
+
+  /*PB5 configuration of the external led, moder(01)*/
+  GPIOB ->MODER &= ~(1 << (5*2 + 1));
+  GPIOB ->MODER |= (1 << (5*2));
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  if (estado_ant != estado){
-		 estado_ant = estado;
-		 switch(estado){
-		 case 0:
-			 GPIOA->BSRR = (1<<5);
-			 break;
-		 default:
-			 GPIOA->BSRR = (1<<5)<<16;
-			 GPIOB->BSRR = (1<<5)<<16;
-		 }
-		 if(estado == 0){
-			 printf("Modo: Manual \r\n");
-		 }else{
-			 printf("Modo: Automatico \r\n");
-		 }
-	 }
+	  if ((state != prev_state)&(medicion_end == 1)){
+		  prev_state = state;
+		  switch(state){
+		  case 0: //Manual Mode led off
+			  printf("Modo manual \r\n");
+			  GPIOA->BSRR = (1<<5)<<16;
+			  break;
 
-	 if(estado == 0 && medicion == 1){
-		 printf("Modo: Manual, iniciando medicion, angulo: %d\r\n",value);
-		 GPIOB->BSRR = (1<<5);
-		 medicion = 0;
-	 }else{
-	 }
+		  default: //Automatic Mode led onn
+			  printf("Modo automatico \r\n");
+			  GPIOA->BSRR = (1<<5);
+		  }
+	  }
+	  if (state == 0){
+		  /*Reading ADC*/
+		  if(medicion_init == 1){
+			  medicion_init = 0;
+			  //Habra que agregar un print de la posicion del ADC
+			  printf("Modo manual -> Angulo del servomotor: \r\n");
+			  GPIOB->BSRR = (1<<5);
+			  waiting(4000000); //0.5s this must be changed after by a timer
+			  GPIOB->BSRR = (1<<5)<<16;
+			  medicion_end = 1;
+		  }
+	  }else{
+		  if(medicion_init == 1){
+			  medicion_init = 0;
+			  for(int i = 0; i<5; i++){
+				  int angulo = -90 + i*45;
+				  printf("Modo automatico -> Angulo del servomotor: %d\r\n", angulo);
+				  waiting(4000000);//0.5s this must be changed after by a timer
+			  }
+			  printf("Volviendo a posicion inicial -> Angulo del servomotor: 0 \r\n");
+			  medicion_end = 1;
+		  }
+	  }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -270,7 +289,7 @@ static void MX_ADC_Init(void)
 
   /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
   */
-  sConfig.Channel = ADC_CHANNEL_6;
+  sConfig.Channel = ADC_CHANNEL_1;
   sConfig.Rank = ADC_REGULAR_RANK_1;
   sConfig.SamplingTime = ADC_SAMPLETIME_4CYCLES;
   if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
@@ -353,8 +372,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LD2_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : PB3 */
-  GPIO_InitStruct.Pin = GPIO_PIN_3;
+  /*Configure GPIO pin : PB4 */
+  GPIO_InitStruct.Pin = GPIO_PIN_4;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
