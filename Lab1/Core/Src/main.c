@@ -78,6 +78,7 @@ void EXTI15_10_IRQHandler(void){
 		EXTI->PR = (0x01 << 13);
 		state = state + 1;
 		if (state >1) state = 0;
+		if (medicion_end == 0) printf("El cambio se realizara al terminar la medicion \r\n");
 	}
 }
 
@@ -163,7 +164,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  if ((state != prev_state)&(medicion_end == 1)){
+	  if ((state != prev_state) && (medicion_end == 1)){
 		  prev_state = state;
 		  switch(state){
 		  case 0: //Manual Mode led off
@@ -181,13 +182,7 @@ int main(void)
 		  if(medicion_init == 1){
 			  medicion_init = 0;
 			  //reads the potenciometer (ADC)
-			  HAL_ADC_Start(&hadc); //start conversion
-			  if(HAL_ADC_PollForConversion(&hadc, 10) == HAL_OK){
-				  value_adc = HAL_ADC_GetValue(&hadc); //reads the value 0-4045
-				  angle = ((value_adc * 180)/4095) - 90;
-			      printf("Modo manual -> Angulo del servomotor: %d\r\n", angle);
-			  }
-			  HAL_ADC_Stop(&hadc);
+			  printf("Modo Manual -> Angulo del servomotor: \r\n");
 			  GPIOB->BSRR = (1<<5);
 			  waiting(4000000); //0.5s this must be changed after by a timer
 			  GPIOB->BSRR = (1<<5)<<16;
@@ -199,10 +194,14 @@ int main(void)
 			  for(int i = 0; i<5; i++){
 				  angle = -90 + i*45;
 				  printf("Modo automatico -> Angulo del servomotor: %d\r\n", angle);
-				  waiting(4000000);//0.5s this must be changed after by a timer
+				  for(int j = 0; j<2;j++){
+				  	  GPIOB->BSRR = (1<<5);
+				  	  waiting(4000000);//0.5s this must be changed after by a timer
+				  	  GPIOB->BSRR = (1<<5)<<16;
+				  	  waiting(4000000);//0.5s this must be changed after by a timer
+				  }
 			  }
 			  printf("Volviendo a posicion inicial -> Angulo del servomotor: 0 \r\n");
-			  medicion_end = 1;
 		  }
 	  }
     /* USER CODE END WHILE */
