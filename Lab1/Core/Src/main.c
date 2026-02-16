@@ -58,6 +58,8 @@ UART_HandleTypeDef huart2;
 unsigned char state = 0;
 unsigned char medicion_init = 0;
 unsigned char medicion_end = 1;
+uint32_t value_adc = 0;
+int angle = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -178,8 +180,14 @@ int main(void)
 		  /*Reading ADC*/
 		  if(medicion_init == 1){
 			  medicion_init = 0;
-			  //Habra que agregar un print de la posicion del ADC
-			  printf("Modo manual -> Angulo del servomotor: \r\n");
+			  //reads the potenciometer (ADC)
+			  HAL_ADC_Start(&hadc); //start conversion
+			  if(HAL_ADC_PollForConversion(&hadc, 10) == HAL_OK){
+				  value_adc = HAL_ADC_GetValue(&hadc); //reads the value 0-4045
+				  angle = ((value_adc * 180)/4095) - 90;
+			      printf("Modo manual -> Angulo del servomotor: %d\r\n", angle);
+			  }
+			  HAL_ADC_Stop(&hadc);
 			  GPIOB->BSRR = (1<<5);
 			  waiting(4000000); //0.5s this must be changed after by a timer
 			  GPIOB->BSRR = (1<<5)<<16;
@@ -189,8 +197,8 @@ int main(void)
 		  if(medicion_init == 1){
 			  medicion_init = 0;
 			  for(int i = 0; i<5; i++){
-				  int angulo = -90 + i*45;
-				  printf("Modo automatico -> Angulo del servomotor: %d\r\n", angulo);
+				  angle = -90 + i*45;
+				  printf("Modo automatico -> Angulo del servomotor: %d\r\n", angle);
 				  waiting(4000000);//0.5s this must be changed after by a timer
 			  }
 			  printf("Volviendo a posicion inicial -> Angulo del servomotor: 0 \r\n");
