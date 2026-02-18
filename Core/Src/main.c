@@ -78,7 +78,7 @@ void EXTI15_10_IRQHandler(void){
 		EXTI->PR = (0x01 << 13);
 		state = state + 1;
 		if (state >1) state = 0;
-		if (medicion_end == 0) printf("El cambio se realizara al terminar la medicion \r\n");
+		if (medicion_end == 0) printf("Mode will change after finishing the measurement \r\n");
 	}
 }
 
@@ -148,7 +148,8 @@ int main(void)
   EXTI ->IMR |= (0x01 << 13); 			// Enable EXTI 13
   NVIC ->ISER[1] |= (1 << (40-32)); 	// Enable EXTI15_10 NVIC
 
-  //PA0 as an input
+  //PA1 as an input
+  GPIOA->MODER &= ~(3 << (1*2));
   GPIOA->MODER |= (3 << (1*2));
   ADC1->SQR3 = 1;
   ADC1->CR2 |= (1 << 0);
@@ -174,12 +175,12 @@ int main(void)
 		  prev_state = state;
 		  switch(state){
 		  case 0: //Manual Mode led off
-			  printf("Modo manual \r\n");
+			  printf("Manual mode \r\n");
 			  GPIOA->BSRR = (1<<5)<<16;
 			  break;
 
 		  default: //Automatic Mode led onn
-			  printf("Modo automatico \r\n");
+			  printf("Automatic mode \r\n");
 			  GPIOA->BSRR = (1<<5);
 		  }
 	  }
@@ -191,13 +192,14 @@ int main(void)
 			  //Start Conversion
 			  ADC1->CR2 |= 0x40000000;
 			  //Wait for the conversion to finish
-			  while((ADC1->SR & 0x0002)==0);
+			  while((ADC1->SR & 0x02)==0);
 			  //read the result (Data Register)
 			  value_adc = ADC1->DR;
+			  printf("ADC raw: %lu\r\n", value_adc);
 			  //Compute the angle (0 to 180)
-			  angle = (value_adc * 180)/4095;
+			  angle = ((value_adc * 180)/4095)-90;
 			  //Print the value
-			  printf("Modo Manual -> Angulo del servomotor: %d \r\n", angle);
+			  printf("Manual mode -> Angle of the servomotor: %d \r\n", angle);
 			  //Pulse sent to the servo
 			  GPIOB->BSRR = (1<<5);
 			  waiting(4000000); //0.5s this must be changed after by a timer
@@ -209,7 +211,7 @@ int main(void)
 			  medicion_init = 0;
 			  for(int i = 0; i<5; i++){
 				  angle = -90 + i*45;
-				  printf("Modo automatico -> Angulo del servomotor: %d\r\n", angle);
+				  printf("Automatic mode -> Angle of the servomotor: %d\r\n", angle);
 				  for(int j = 0; j<2;j++){
 				  	  GPIOB->BSRR = (1<<5);
 				  	  waiting(4000000);//0.5s this must be changed after by a timer
@@ -217,7 +219,8 @@ int main(void)
 				  	  waiting(4000000);//0.5s this must be changed after by a timer
 				  }
 			  }
-			  printf("Volviendo a posicion inicial -> Angulo del servomotor: 0 \r\n");
+			  printf("Returning to initial position -> Angle of the servomotor: 0 \r\n");
+			  medicion_end = 1;
 		  }
 	  }
     /* USER CODE END WHILE */
