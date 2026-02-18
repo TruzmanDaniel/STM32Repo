@@ -148,6 +148,12 @@ int main(void)
   EXTI ->IMR |= (0x01 << 13); 			// Enable EXTI 13
   NVIC ->ISER[1] |= (1 << (40-32)); 	// Enable EXTI15_10 NVIC
 
+  //PA0 as an input
+  GPIOA->MODER |= (3 << (1*2));
+  ADC1->SQR3 = 1;
+  ADC1->CR2 |= (1 << 0);
+  waiting(1000);
+
   /*OUTPUTS: */
   /*PA5 configuration in output mode, moder(01)  */
   GPIOA ->MODER &= ~(1 << (5*2 + 1));
