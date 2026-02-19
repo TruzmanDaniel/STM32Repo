@@ -148,12 +148,13 @@ int main(void)
   EXTI ->IMR |= (0x01 << 13); 			// Enable EXTI 13
   NVIC ->ISER[1] |= (1 << (40-32)); 	// Enable EXTI15_10 NVIC
 
-  //PA1 as an input
+  //PA1 as an input analog mode, (11)
   GPIOA->MODER &= ~(3 << (1*2));
   GPIOA->MODER |= (3 << (1*2));
+  ADC1->CR1 = 0x00000000;//Res (00) 12 bits, scan mode 0 disbabled, EOCIE 0
+  ADC1->SQR1 = 0x00000000; // 1 channel enabled
   ADC1->SQR3 = 1;
   ADC1->CR2 |= (1 << 0);
-  waiting(1000);
 
   /*OUTPUTS: */
   /*PA5 configuration in output mode, moder(01)  */
@@ -186,19 +187,18 @@ int main(void)
 	  }
 	  if (state == 0){
 		  /*Reading ADC*/
+		  //reads the potenciometer (ADC)
+		  ADC1->CR2 |= 0x40000000;
+		  //Wait for the conversion to finish
+		  while((ADC1->SR & 0x02)==0);
+		  //read the result (Data Register)
+		  value_adc = ADC1->DR;
+		  //Compute the angle (0 to 180)
+		  angle = ((value_adc * 180)/4095)-90;
 		  if(medicion_init == 1){
 			  medicion_init = 0;
-			  //reads the potenciometer (ADC)
-			  //Start Conversion
-			  ADC1->CR2 |= 0x40000000;
-			  //Wait for the conversion to finish
-			  while((ADC1->SR & 0x02)==0);
-			  //read the result (Data Register)
-			  value_adc = ADC1->DR;
-			  printf("ADC raw: %lu\r\n", value_adc);
-			  //Compute the angle (0 to 180)
-			  angle = ((value_adc * 180)/4095)-90;
 			  //Print the value
+			  printf("ADC raw: %lu\r\n", value_adc);
 			  printf("Manual mode -> Angle of the servomotor: %d \r\n", angle);
 			  //Pulse sent to the servo
 			  GPIOB->BSRR = (1<<5);
